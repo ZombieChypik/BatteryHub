@@ -284,6 +284,11 @@ public sealed class TrayApp : ApplicationContext
         bluetooth.Click += (_, _) => OpenSettings("ms-settings:bluetooth");
         menu.Items.Add(bluetooth);
 
+        // диагностика: запускает --probe и открывает папку с готовым probe.log
+        var diag = new ToolStripMenuItem(L10n.T("menu.diag"));
+        diag.Click += (_, _) => RunDiagnostics();
+        menu.Items.Add(diag);
+
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(L10n.T("menu.exit"), null, (_, _) => ExitApp());
 
@@ -303,6 +308,41 @@ public sealed class TrayApp : ApplicationContext
         {
             // настройки недоступны — игнорируем
         }
+    }
+
+    /// <summary>Запускает диагностику (--probe) и открывает папку с готовым probe.log.</summary>
+    private void RunDiagnostics()
+    {
+        try
+        {
+            _tray.BalloonTipTitle = "Battery Hub";
+            _tray.BalloonTipIcon = ToolTipIcon.Info;
+            _tray.BalloonTipText = "Диагностика запущена: подвигайте мышью ~10 секунд.";
+            _tray.ShowBalloonTip(4000);
+        }
+        catch
+        {
+        }
+
+        Task.Run(async () =>
+        {
+            await ProbeRunner.RunAsync(Array.Empty<string>());
+            try
+            {
+                var dir = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "BatteryHub");
+                var logPath = Path.Combine(dir, "probe.log");
+                if (File.Exists(logPath))
+                {
+                    using var _ = System.Diagnostics.Process.Start(
+                        new System.Diagnostics.ProcessStartInfo("explorer.exe", $"/select,\"{logPath}\"")
+                        { UseShellExecute = true });
+                }
+            }
+            catch
+            {
+            }
+        });
     }
 
     private void SwitchLanguage(string lang)
