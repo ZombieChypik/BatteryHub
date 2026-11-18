@@ -47,7 +47,7 @@
 Идея и общий принцип работы взяты из проекта
 [Wireless-Device-Battery-Monitor](https://github.com/krisgfx9/Wireless-Device-Battery-Monitor)
 автора [krisgfx9](https://github.com/krisgfx9) — код здесь написан с нуля
-(C#, WinForms, .NET 8), но подход «значок с зарядом рядом с часами» вдохновлён им.
+(C#, WinForms, .NET 8), но подход и принцип вдохновлён им.
 
 ## Сборка из исходников
 
