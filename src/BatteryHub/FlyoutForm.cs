@@ -199,7 +199,7 @@ public sealed class FlyoutForm : Form
         using (var ghFont = new Font("Segoe UI", 8.5f, FontStyle.Underline))
         using (var ghBrush = new SolidBrush(Color.FromArgb(96, 168, 250)))
         {
-            var verText = "Battery Hub v1.2.9 · ";
+            var verText = "Battery Hub v1.2.10 · ";
             var verSize = g.MeasureString(verText, verFont);
             var ghText = "github.com/ZombieChypik";
             var ghSize = g.MeasureString(ghText, ghFont);

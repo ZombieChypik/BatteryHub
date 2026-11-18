@@ -10,7 +10,7 @@
     <Nullable>enable</Nullable>
     <RootNamespace>BatteryHub</RootNamespace>
     <AssemblyName>BatteryHub</AssemblyName>
-    <Version>1.2.9</Version>
+    <Version>1.2.10</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
     <ServerGarbageCollection>false</ServerGarbageCollection>

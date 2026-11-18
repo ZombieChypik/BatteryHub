@@ -51,7 +51,6 @@ public static class ProbeRunner
 
     private static void ProbeHid(string[] args, Action<string> line)
     {
-        line("== HID-устройства с VID 0x1D57 ==");
         var seconds = 10;
         for (var i = 0; i < args.Length - 1; i++)
         {
@@ -61,46 +60,53 @@ public static class ProbeRunner
             }
         }
 
-        var devices = DeviceList.Local.GetHidDevices(X11DongleSource.VendorId).ToList();
+        // Универсальная диагностика: все HID-устройства (любой производитель),
+        // чтобы определить, передаёт ли донгл произвольной мыши заряд.
+        line("== Все HID-устройства ==");
+        var devices = DeviceList.Local.GetHidDevices()
+            .GroupBy(d => (d.VendorID, d.ProductID))
+            .ToList();
         if (devices.Count == 0)
         {
-            line("  Не найдено ни одного HID-устройства с VID 0x1D57.");
-            line("  (Донгл подключён? Мышь может работать в Bluetooth-режиме — тогда донгл не нужен.)");
+            line("  HID-устройства не найдены.");
             return;
         }
 
-        foreach (var device in devices)
+        foreach (var group in devices)
         {
-            line($"  PID=0x{device.ProductID:X4}  «{device.GetProductName()}»  maxInput={device.GetMaxInputReportLength()}  maxFeature={device.GetMaxFeatureReportLength()}");
+            var first = group.First();
+            var isX11 = first.VendorID == X11DongleSource.VendorId;
+            var tag = isX11 ? "  [X11]" : "";
+            var name = first.GetProductName();
+            line($"  VID={first.VendorID:X4} PID={first.ProductID:X4}{tag} «{name}» интерфейсов: {group.Count()}");
+            foreach (var d in group.Take(8))
+            {
+                line($"      maxInput={d.GetMaxInputReportLength()} maxFeature={d.GetMaxFeatureReportLength()} {Tail(d.DevicePath)}");
+            }
         }
         line("");
 
-        var dongles = devices.Where(d => d.ProductID == X11DongleSource.ProductIdDongle).ToList();
-        if (dongles.Count == 0)
+        line($"== Чтение входных отчётов {seconds} с со ВСЕХ открытых интерфейсов ==");
+        line("   (пошевелите мышью и покликайте — так появляются отчёты)");
+        var streams = new List<(HidDevice Device, HidStream Stream, Dictionary<string, int> Unique)>();
+        foreach (var device in DeviceList.Local.GetHidDevices())
         {
-            line("  Донгл (PID 0xFA60) не найден — читать отчёты не из чего.");
-            return;
-        }
-
-        line($"== Чтение входных отчётов {seconds} с (пошевелите мышь, если ничего не приходит) ==");
-        var streams = new List<(HidDevice Device, HidStream Stream)>();
-        foreach (var device in dongles)
-        {
+            if (device.GetMaxInputReportLength() == 0)
+            {
+                continue;
+            }
             if (device.TryOpen(out var stream))
             {
                 stream.ReadTimeout = 200;
-                streams.Add((device, stream));
-            }
-            else
-            {
-                line($"  Не удалось открыть интерфейс: {Tail(device.DevicePath)}");
+                streams.Add((device, stream, new Dictionary<string, int>()));
             }
         }
+        line($"  Открыто интерфейсов: {streams.Count} (остальные — системные/недоступные)");
+        line("");
 
         try
         {
-            var buffer = new byte[128];
-            var reports = 0;
+            var buffer = new byte[256];
             var batterySeen = false;
             var deadline = DateTime.UtcNow.AddSeconds(seconds);
             var paths = streams.Select(s => Tail(s.Device.DevicePath)).ToList();
@@ -117,38 +123,61 @@ public static class ProbeRunner
                     {
                         continue;
                     }
-                    catch (Exception ex)
+                    catch
                     {
-                        line($"  [{paths[i]}] чтение прервано: {ex.Message}");
+                        // этот интерфейс умер — выкидываем только его
                         streams.RemoveAt(i);
                         paths.RemoveAt(i);
                         i--;
                         continue;
                     }
 
-                    if (n > 0)
+                    if (n <= 0)
                     {
-                        reports++;
-                        var hex = string.Join(" ", buffer.Take(Math.Min(n, 16)).Select(b => $"{b:X2}"));
+                        continue;
+                    }
+
+                    var hex = string.Join(" ", buffer.Take(Math.Min(n, 16)).Select(b => $"{b:X2}"));
+                    var uniq = streams[i].Unique;
+                    uniq.TryGetValue(hex, out var count);
+                    uniq[hex] = count + 1;
+
+                    if (count == 0 && uniq.Values.Sum() <= 60)
+                    {
                         line($"  [{paths[i]}] {hex}");
-                        var pct = ParseBattery(buffer, n);
-                        if (pct.HasValue && !batterySeen)
-                        {
-                            batterySeen = true;
-                            line($"  ^^ ЗАРЯД РАСПОЗНАН: {pct}%");
-                        }
+                    }
+
+                    var pct = ParseBattery(buffer, n);
+                    if (pct.HasValue && !batterySeen)
+                    {
+                        batterySeen = true;
+                        line($"  ^^ ЗАРЯД X11 РАСПОЗНАН: {pct}%");
                     }
                 }
             }
-            line($"Всего отчётов за {seconds} с: {reports}. Заряд распознан: {batterySeen}.");
+
+            // сводка: уникальные отчёты каждого интерфейса — тут и будет формат заряда
+            line("");
+            line("== Сводка по интерфейсам (уникальные отчёты) ==");
+            foreach (var (device, _, uniq) in streams)
+            {
+                var path = Tail(device.DevicePath);
+                line($"  [{path}] VID={device.VendorID:X4} PID={device.ProductID:X4}: отчётов {uniq.Values.Sum()}, уникальных {uniq.Count}");
+                foreach (var kv in uniq.OrderByDescending(k => k.Value).Take(12))
+                {
+                    line($"      {kv.Key}  x{kv.Value}");
+                }
+            }
             if (!batterySeen)
             {
-                line("Подсказка: пошевелите мышью/кликните — мышь шлёт отчёт о заряде только когда бодрствует.");
+                line("");
+                line("Подсказка: если среди уникальных отчётов есть подозрительный «постоянный» отчёт");
+                line("(например, меняющийся при разряде мыши) — это и есть заряд; пришлите лог разработчику.");
             }
         }
         finally
         {
-            foreach (var (_, stream) in streams)
+            foreach (var (_, stream, _) in streams)
             {
                 try
                 {
@@ -158,6 +187,64 @@ public static class ProbeRunner
                 {
                 }
             }
+        }
+
+        ProbeFeatureReports(line);
+    }
+
+    /// <summary>Пробует читать feature-отчёты (некоторые донглы отвечают зарядом на GetFeature).</summary>
+    private static void ProbeFeatureReports(Action<string> line)
+    {
+        line("");
+        line("== Feature-отчёты (GetFeature) ==");
+        var attempts = 0;
+        foreach (var device in DeviceList.Local.GetHidDevices())
+        {
+            if (device.GetMaxFeatureReportLength() == 0)
+            {
+                continue;
+            }
+            if (!device.TryOpen(out var stream))
+            {
+                continue;
+            }
+
+            var path = Tail(device.DevicePath);
+            try
+            {
+                for (byte id = 0; id <= 8 && attempts < 120; id++)
+                {
+                    var buffer = new byte[device.GetMaxFeatureReportLength()];
+                    buffer[0] = id;
+                    try
+                    {
+                        if (stream.GetFeature(buffer))
+                        {
+                            var hex = string.Join(" ", buffer.Take(Math.Min(buffer.Length, 16)).Select(b => $"{b:X2}"));
+                            line($"  [{path}] feature 0x{id:X2} -> {hex}");
+                        }
+                        attempts++;
+                    }
+                    catch
+                    {
+                        attempts++;
+                    }
+                }
+            }
+            finally
+            {
+                try
+                {
+                    stream.Dispose();
+                }
+                catch
+                {
+                }
+            }
+        }
+        if (attempts == 0)
+        {
+            line("  Нет устройств с feature-отчётами.");
         }
     }
 
