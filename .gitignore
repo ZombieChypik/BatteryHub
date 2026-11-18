@@ -1,0 +1,9 @@
+bin/
+obj/
+out/
+dist/
+publish/
+.vs/
+*.user
+*.suo
+diag.log
