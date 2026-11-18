@@ -42,6 +42,13 @@
 
 Требования: Windows 10 (1903+) или Windows 11.
 
+## Благодарности
+
+Идея и общий принцип работы взяты из проекта
+[Wireless-Device-Battery-Monitor](https://github.com/krisgfx9/Wireless-Device-Battery-Monitor)
+автора [krisgfx9](https://github.com/krisgfx9) — код здесь написан с нуля
+(C#, WinForms, .NET 8), но подход «значок с зарядом рядом с часами» вдохновлён им.
+
 ## Сборка из исходников
 
 ```
