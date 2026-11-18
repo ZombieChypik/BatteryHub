@@ -218,11 +218,9 @@ public static class ProbeRunner
                     buffer[0] = id;
                     try
                     {
-                        if (stream.GetFeature(buffer))
-                        {
-                            var hex = string.Join(" ", buffer.Take(Math.Min(buffer.Length, 16)).Select(b => $"{b:X2}"));
-                            line($"  [{path}] feature 0x{id:X2} -> {hex}");
-                        }
+                        stream.GetFeature(buffer);
+                        var hex = string.Join(" ", buffer.Take(Math.Min(buffer.Length, 16)).Select(b => $"{b:X2}"));
+                        line($"  [{path}] feature 0x{id:X2} -> {hex}");
                         attempts++;
                     }
                     catch
