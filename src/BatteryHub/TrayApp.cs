@@ -13,7 +13,7 @@ public sealed class TrayApp : ApplicationContext
 
     private readonly DeviceRegistry _registry = new();
     private readonly BluetoothSource _bluetooth;
-    private readonly X11DongleSource _x11;
+    private readonly UniversalDongleSource _dongle;
     private readonly NotifyIcon _tray;
     private readonly TaskbarWidget _widget;
     private readonly EventWaitHandle _pokeEvent;
@@ -33,7 +33,7 @@ public sealed class TrayApp : ApplicationContext
         _sync = SynchronizationContext.Current
             ?? throw new InvalidOperationException("Нет UI-синхронизационного контекста");
         _bluetooth = new BluetoothSource(_registry);
-        _x11 = new X11DongleSource(_registry);
+        _dongle = new UniversalDongleSource(_registry);
 
         _pokeEvent = new EventWaitHandle(false, EventResetMode.AutoReset, Program.ShowPanelEventName);
         _pokeRegistration = ThreadPool.RegisterWaitForSingleObject(
@@ -76,7 +76,7 @@ public sealed class TrayApp : ApplicationContext
         Autostart.EnsureEnabled();
 
         _bluetooth.Start();
-        _x11.Start();
+        _dongle.Start();
 
         var flushTimer = new System.Windows.Forms.Timer { Interval = 60_000 };
         flushTimer.Tick += (_, _) => _registry.Flush();
@@ -97,7 +97,7 @@ public sealed class TrayApp : ApplicationContext
     {
         // реальное время по клику: немедленно перезапрашиваем оба источника
         _bluetooth.RefreshNow();
-        _x11.Poke();
+        _dongle.Poke();
 
         _flyout ??= new FlyoutForm();
         _flyout.UpdateItems(_registry.GetSnapshot());
@@ -187,7 +187,7 @@ public sealed class TrayApp : ApplicationContext
         menu.Items.Add(L10n.T("menu.refresh"), null, (_, _) =>
         {
             _bluetooth.RefreshNow();
-            _x11.Poke();
+            _dongle.Poke();
             _flyout?.UpdateItems(_registry.GetSnapshot());
         });
         menu.Items.Add(new ToolStripSeparator());
@@ -485,7 +485,7 @@ public sealed class TrayApp : ApplicationContext
         _pokeRegistration.Unregister(null);
         _pokeEvent.Dispose();
         _bluetooth.Dispose();
-        _x11.Dispose();
+        _dongle.Dispose();
         _registry.Flush();
         _icon.Dispose();
         _flyout?.Dispose();

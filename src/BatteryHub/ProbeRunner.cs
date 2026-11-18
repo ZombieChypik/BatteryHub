@@ -75,7 +75,7 @@ public static class ProbeRunner
         foreach (var group in devices)
         {
             var first = group.First();
-            var isX11 = first.VendorID == X11DongleSource.VendorId;
+            var isX11 = first.VendorID == UniversalDongleSource.X11VendorId;
             var tag = isX11 ? "  [X11]" : "";
             var name = first.GetProductName();
             line($"  VID={first.VendorID:X4} PID={first.ProductID:X4}{tag} «{name}» интерфейсов: {group.Count()}");
